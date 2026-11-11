@@ -16,6 +16,11 @@
 - [Konfigurasi Sistem](#-konfigurasi-sistem)
 - [Lisensi & Pemeliharaan](#-lisensi--pemeliharaan)
 
+## 📚 Dokumentasi Lanjutan
+
+- [Dokumentasi Teknis & Skema Database](./dokumentasi_teknis_skema_database.md) – Penjelasan detail struktur modul, arsitektur data, dan skema tabel SQLite (`monitoring.db`).
+- [Spesifikasi API & Integrasi MineStar](./spesifikasi_api_integrasi_minestar.md) – Detail endpoint REST API (`app.py`), format payload JSON, dan alat diagnosa antarmuka Caterpillar MineStar.
+
 ---
 
 ## 📌 Fitur Utama
