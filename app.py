@@ -189,12 +189,12 @@ WITH FilteredDelays AS (
         J1.DELAYCATEGORY,
         J1.DELAYCLASS_OID
     FROM
-        [mshist_rep].[dbo].[DELAY] AS P
+        [].[dbo].[DELAY] AS P
     LEFT JOIN
-        [msmodel_rep].[dbo].[DELAYCLASS] AS J1
+        [].[dbo].[DELAYCLASS] AS J1
         ON P.DELAYCLASS = J1.DELAYCLASS_OID
     LEFT JOIN
-        [msmodel_rep].[dbo].[DELAYCATEGORY] AS J3
+        [].[dbo].[DELAYCATEGORY] AS J3
         ON J1.DELAYCATEGORY = J3.DELAYCATEGORY_OID
     WHERE
         P.STATUS = 3
@@ -203,9 +203,9 @@ MachinesWithGPS AS (
     SELECT DISTINCT
         b.MACHINE_OID
     FROM
-        [msmodel_rep].[dbo].[MACHINE_ONBOARD_HARDWARE] AS hw
+        [].[dbo].[MACHINE_ONBOARD_HARDWARE] AS hw
     INNER JOIN
-        [msmodel_rep].[dbo].[MACHINE] AS b
+        [].[dbo].[MACHINE] AS b
         ON hw.OID = b.MACHINE_OID
     WHERE
         hw.CONFIGURATION_NAME = 'gps'
@@ -218,7 +218,7 @@ SELECT
     d.MACHINE_OID as GPSStatus,
     b.DELAYCLASS_OID
 FROM
-    [msmodel_rep].[dbo].MACHINE AS a
+    [].[dbo].MACHINE AS a
 LEFT JOIN
     FilteredDelays AS b
     ON a.MACHINE_OID = b.MACHINE_OID
