@@ -51,7 +51,7 @@ TIMEZONE_NAME = os.getenv("TIMEZONE_NAME", "Asia/Makassar")
 
 # Pengaturan SQL Server. Server default dipertahankan dari script awal.
 SQL_DRIVER = os.getenv("SQL_DRIVER", "ODBC Driver 17 for SQL Server")
-SQL_SERVER = os.getenv("SQL_SERVER", "10.4.17.13")
+SQL_SERVER = os.getenv("SQL_SERVER", "")
 SQL_DATABASE = os.getenv("SQL_DATABASE", "")
 SQL_USERNAME = os.getenv("SQL_USERNAME", "")
 SQL_PASSWORD = os.getenv("SQL_PASSWORD", "")
