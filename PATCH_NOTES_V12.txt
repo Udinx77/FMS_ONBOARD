@@ -1,0 +1,14 @@
+V12
+- Kartu unit ringkas: availability perangkat hanya tampil saat kartu diklik (Enter/Spasi juga bisa); menutup sendiri setelah 60 detik. Header dan tile tidak berubah.
+- Lampu G dari jumlah satelit GPS (query_gps.sql: OID, nama truk, Satellites; per menit, nilai terbaru dipakai): NULL atau <13 merah, 13-14 kuning, 15+ hijau. Ambang dan nama kolom diatur di .env (GPS_*). Unit yang tidak ada di hasil query memakai ping GPS (GPS_ABSENT_IS_RED=true untuk merah).
+- Filter GPS: unit dengan GPS normal = lampu G hijau (satelit 15+); tanpa data satelit dinilai dari ping GPS.
+- query_gps.sql masih KOSONG (query revisi belum diterima): tempel query di file itu. Cek dengan: python gps_metric.py. Sebelum diisi, lampu G memakai ping GPS seperti V11.
+- Export availability bulanan ONB (Excel) dari halaman /report/sqlite. Bulan yang sudah lewat dan sudah diekspor dihapus otomatis oleh collector setelah melewati AVAILABILITY_KEEP_MONTHS bulan terakhir (bawaan 2); bulan yang belum diekspor tidak pernah dihapus. Unit BD dikecualikan per hari (dicatat dashboard mulai V12).
+- Zona waktu bawaan Asia/Makassar (WITA). Ubah TIMEZONE_NAME di .env Anda jika masih Asia/Jakarta.
+- Tes baru: test_gps_metric.py, test_monthly.py, test_monthly_app.py.
+
+CARA UPDATE:
+1. Matikan app.py dan collect_ping.py. Ekstrak ZIP ke folder project (jangan timpa .env, monitoring.db, dataoidip.xlsx).
+2. Tambahkan ke .env bila perlu (contoh ada di .env.example): TIMEZONE_NAME=Asia/Makassar dan baris GPS_* / AVAILABILITY_*.
+3. Tempel query GPS di query_gps.sql, lalu jalankan: python gps_metric.py
+4. Jalankan run.bat.

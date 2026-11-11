@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FMS Onboard Monitoring</title>
+<style>
+/* Font dibundel di static/fonts (lisensi OFL) agar tampil sama di semua PC walau tanpa internet. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/inter-latin-500-normal.woff2') }}") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/inter-latin-600-normal.woff2') }}") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/inter-latin-700-normal.woff2') }}") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/jetbrains-mono-latin-600-normal.woff2') }}") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/jetbrains-mono-latin-700-normal.woff2') }}") format("woff2"); }
+:root {
+    --bg: #070707;
+    --surface: #2e2e2e;
+    --raised: #1d2e3d;
+    --line: #494949;
+    --text: #e9eff5;
+    --muted: #bcc5cd;
+    --accent: #b5bcc2;
+    --ok: #49e82b;      /* saturasi indikator diturunkan: hijau -20%, kuning -15%, oranye -18%, merah -32% (dan sedikit lebih terang agar tetap terbaca) */
+    --warn: #ecd713;
+    --alert: #e86e17;
+    --crit: #dc4966;
+    --bd: #a78bfa;
+    --off: #2c3b49;
+    --ink: #0b1218;
+    --radius: 0.625rem;
+    --font: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    --font-data: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--bg); font-size: clamp(16px, 1.15vw, 32px); }
+body {
+    margin: 0;
+    padding: 1rem clamp(0.75rem, 2vw, 1.75rem) 2rem;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font: 500 1rem/1.45 var(--font);
+    text-rendering: optimizeLegibility;
+    font-variant-numeric: tabular-nums;
+}
+h1, h2, h3, p { margin: 0; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 0.1875rem solid var(--accent); outline-offset: 0.125rem; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: -62.4375rem; top: 0.5rem; background: var(--accent); color: var(--ink); padding: 0.5rem 0.875rem; border-radius: 0.375rem; z-index: 100; }
+.skip:focus { left: 0.5rem; }
+
+/* ---------- Header ---------- */
+.top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+.brand h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: .015em; }
+#status { margin-top: 0.25rem; font-size: .95rem; color: var(--muted); }
+#status[data-state="connected"] { color: #8fe6b3; }
+#status[data-state="error"] { color: #ff9aa6; }
+#status[data-state="waiting"] { color: #ffd98a; }
+#stale {
+    margin-top: 0.5rem;
+    padding: 0.375rem 0.625rem;
+    background: rgba(255, 138, 61, .14);
+    font-size: .85rem;
+    border-radius: 0.375rem;
+}
+#stale[hidden] { display: none; }
+
+.overall { display: flex; align-items: center; gap: 1.375rem; }
+.overall-label { display: block; font-size: .95rem; color: var(--muted); }
+.overall-value { font-family: var(--font); letter-spacing: .01em; display: block; font-size: clamp(2.2rem, 4vw, 3.2rem); font-weight: 700; line-height: 1.05; color: var(--muted); }
+.overall-value[data-t="ok"] { color: var(--ok); }
+.overall-value[data-t="warn"] { color: var(--warn); }
+.overall-value[data-t="crit"] { color: var(--crit); }
+.ov-rows { display: flex; flex-wrap: wrap; gap: 0.375rem 1.75rem; }
+.ov-row { display: flex; flex-direction: column; gap: 1px; min-width: 4.6em; }
+.ov-row > span { font-size: .9rem; color: var(--muted); }
+.ov-row > b { font-family: var(--font-data); font-size: 1.35rem; font-weight: 700; color: var(--muted); }
+.ov-row > b[data-t="ok"] { color: var(--ok); }
+.ov-row > b[data-t="warn"] { color: var(--warn); }
+.ov-row > b[data-t="crit"] { color: var(--crit); }
+.overall-meta { grid-column: 1 / -1; font-size: .9rem; color: var(--muted); }
+
+.btn {
+    min-height: 2.75rem;
+    padding: 0 1.125rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s, color .15s;
+}
+.btn:hover { background: var(--accent); color: var(--ink); }
+
+/* ---------- Ringkasan kategori ---------- */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-top: 0.875rem; }
+.tile {
+    --c: var(--muted);
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    min-height: 4rem;
+    padding: 0.625rem 1rem;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s, border-color .15s;
+}
+.tile:hover { background: var(--raised); }
+.tile[aria-pressed="true"] { background: var(--raised); border-color: var(--c); }
+.tile[data-cat="need"] { --c: var(--crit); }
+.tile[data-cat="monitoring"] { --c: var(--alert); }
+.tile[data-cat="bd"] { --c: var(--bd); }
+.tile[data-cat="comply"] { --c: var(--ok); }
+.tile-n { font-family: var(--font-data); font-size: 2.5rem; font-weight: 700; line-height: 1; min-width: 1.6ch; flex: none; color: var(--c); }
+.tile-x { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.tile-t { font-size: 1.15rem; font-weight: 700; }
+.tile-b { display: flex; flex-direction: column; gap: 0.125rem; font-size: .95rem; font-weight: 500; color: var(--muted); }
+.tile-b:empty { display: none; }
+.tile-d { display: block; font-size: .75rem; font-weight: 400; color: var(--muted); }
+
+/* ---------- Toolbar ---------- */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; margin: 1.125rem 0 0.375rem; }
+.search input {
+    width: min(100%, 17.5rem);
+    min-height: 2.75rem;
+    padding: 0 0.875rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+}
+.search input::placeholder { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.chip-btn {
+    min-height: 2.75rem;
+    min-width: 3.25rem;
+    padding: 0 0.875rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.chip-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--ink); font-weight: 700; }
+.chip-btn[data-gps="normal"] { margin-left: 0.5rem; }
+.shown { margin-left: auto; font-size: .95rem; color: var(--muted); }
+
+/* ---------- Grup & kartu unit ---------- */
+.group { margin-top: 1.25rem; }
+.group[hidden] { display: none; }
+.group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; margin-bottom: 0.625rem; }
+.group[data-cat="need"] { --c: var(--crit); }
+.group[data-cat="monitoring"] { --c: var(--alert); }
+.group[data-cat="bd"] { --c: var(--bd); }
+.group[data-cat="comply"] { --c: var(--ok); }
+.group-head h2 { font-size: 1.4rem; font-weight: 700; }
+.group-count { font-size: 1.2rem; font-weight: 700; color: var(--c); }
+.group-hint { font-size: .95rem; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(18.75rem, 1fr)); gap: 0.625rem; align-items: start; }
+.empty { grid-column: 1 / -1; padding: 0.875rem; color: var(--muted); font-size: .9rem; background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); }
+
+.unit {
+    padding: 0.6875rem 0.75rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+.unit { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.unit:hover, .unit.open { background: color-mix(in srgb, var(--surface) 88%, #fff); }  /* netral, mengikuti warna kartu */
+.unit.changed { animation: changed 1.8s ease-out; }
+@keyframes changed { 0% { box-shadow: 0 0 0 0.1875rem var(--accent); } 100% { box-shadow: 0 0 0 0.1875rem transparent; } }
+.u-head { display: flex; align-items: center; gap: 0.375rem; min-height: 1.5rem; margin-bottom: 0.5625rem; }
+.u-name { font-size: 1.4rem; font-weight: 700; letter-spacing: .01em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-head::after { content: ""; flex: none; order: 9; width: 0.45rem; height: 0.45rem; margin: 0 0.25rem 0.2rem 0.125rem; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+.unit.open .u-head::after { transform: rotate(-135deg); margin-bottom: -0.1rem; }
+.u-flag { flex: none; padding: 1px 0.4375rem; font-size: .88rem; font-weight: 700; border-radius: 0.3125rem; }
+.u-flag.rto {
+    background: transparent;
+    color: var(--crit);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    font-family: var(--font-data);
+    font-size: .92rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+.u-flag.bd { background: rgba(167, 139, 250, .2); color: #c9b9ff; }
+
+.lamps { display: flex; justify-content: space-between; gap: 0.1875rem; }
+.lamp {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 2.375rem;
+    height: 2.375rem;
+    flex: 0 0 2.375rem;
+    border-radius: 50%;
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--off);
+}
+.lamp[data-s="ok"] { background: var(--ok); color: #071607; }
+.lamp[data-s="warn"] { background: var(--warn); color: #211b00; }
+.lamp[data-s="alert"] { background: var(--alert); color: #ffffff; }
+.lamp[data-s="crit"] { background: var(--crit); color: #ffffff; }
+.lamp[data-s="off"] { color: var(--muted); border: 1px dashed #4a6075; }
+
+
+.av {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+    margin-top: 0.625rem;
+    padding-top: 0;
+    border-top: 0;
+}
+.unit[data-cat="bd"] .av { opacity: .55; }
+.av-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.3125rem 0.375rem;
+    border: 1px solid var(--line);
+    border-radius: 0.375rem;
+    background: rgba(8, 16, 23, .55);
+    font-size: .9rem;
+    overflow: hidden;
+}
+.av-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 600; }
+.av-row > b { flex: none; white-space: nowrap; font-family: var(--font-data); font-weight: 700; color: var(--muted); }
+.av-row > b[data-t="ok"] { color: var(--ok); }
+.av-row > b[data-t="warn"] { color: var(--warn); }
+.av-row > b[data-t="crit"] { color: var(--crit); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-top: 1.75rem; padding-top: 0.875rem; border-top: 1px solid var(--line); font-size: .9rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.legend i { width: 0.75rem; height: 0.75rem; border-radius: 0.1875rem; background: var(--off); }
+.legend i[data-s="ok"] { background: var(--ok); }
+.legend i[data-s="warn"] { background: var(--warn); }
+.legend i[data-s="alert"] { background: var(--alert); }
+.legend i[data-s="crit"] { background: var(--crit); }
+
+@media (max-width: 1000px) {
+    .top { grid-template-columns: 1fr auto; }
+    .overall { grid-column: 1 / -1; order: 3; }
+    .overall-meta { order: 4; }
+}
+@media (max-width: 760px) {
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tile { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+    .top { grid-template-columns: 1fr; }
+    .overall { flex-wrap: wrap; }
+    .ov-rows { width: 100%; }
+    .shown { margin-left: 0; width: 100%; }
+}
+/* ---------- Motion: tenang, hanya saat ada kejadian (data berubah, klik, filter); transform/opacity saja ---------- */
+@keyframes boot { from { opacity: 0; } }
+@keyframes enter { from { opacity: 0; transform: translateY(0.5rem); } }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes beat { from { box-shadow: 0 0 0 0 currentColor; } to { box-shadow: 0 0 0 0.6rem transparent; } }
+@keyframes arrive { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 35% { box-shadow: 0 0 0 0.3125rem var(--crit); } }
+@keyframes surge { from { box-shadow: 0 0 0 0 var(--crit); } to { box-shadow: 0 0 0 0.75rem transparent; } }
+.top, .tiles { animation: boot .45s ease-out backwards; }
+.unit { transition: transform .16s ease-out, box-shadow .16s ease-out, background-color .16s; }
+.unit:hover { transform: translateY(-0.125rem); box-shadow: 0 0.375rem 1rem rgba(0, 0, 0, .4); }
+.unit:active { transform: scale(.985); }
+.unit.enter { animation: enter .28s ease-out backwards; animation-delay: calc(var(--i, 0) * 14ms); }
+.unit.arrive { animation: arrive 1.1s ease-out 2; }  /* unit baru masuk Need Check */
+.lamp.pop { animation: pop .5s cubic-bezier(.2, .9, .3, 1.35); }  /* lampu yang berubah warna */
+.tile { transition: background .15s, border-color .15s, transform .15s; }
+.tile:hover { transform: translateY(-0.0625rem); }
+.tile:active { transform: scale(.985); }
+.tile-n.bump { animation: bump .45s ease-out; }
+.tile.surge { animation: surge 1s ease-out; }  /* jumlah Need Check bertambah */
+.chip-btn { transition: background-color .15s, color .15s, transform .12s; }
+.chip-btn:active { transform: scale(.95); }
+.search input { transition: border-color .15s, box-shadow .15s; }
+.search input:focus { border-color: var(--accent); box-shadow: 0 0 0 0.1875rem color-mix(in srgb, var(--accent) 30%, transparent); }
+.overall-value { transition: color .4s ease; }
+#status::before { content: ""; display: inline-block; width: .55rem; height: .55rem; margin-right: .5rem; border-radius: 50%; background: currentColor; vertical-align: .05em; }
+#status.beat::before { animation: beat .9s ease-out; }  /* denyut tiap data baru masuk */
+.av-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .22s ease-out; }
+.av-wrap > .av { min-height: 0; overflow: hidden; margin-top: 0; padding-top: 0.625rem; }
+.av-wrap.closed { grid-template-rows: 0fr; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Lewati ke daftar unit</a>
+
+<header class="top">
+    <div class="brand">
+        <h1>FMS Onboard Monitoring</h1>
+        <p id="status" data-state="waiting" role="status">Menyambungkan ke server...</p>
+        <p id="stale" role="alert" hidden></p>
+    </div>
+    <div class="overall" aria-live="polite">
+        <div>
+            <span class="overall-label">Availability keseluruhan</span>
+            <strong id="overall-availability" class="overall-value">N/A</strong>
+        </div>
+        <div class="ov-rows" id="ov-rows"></div>
+    </div>
+    <button type="button" id="open-report" class="btn">Laporan SQLite</button>
+    <p id="overall-meta" class="overall-meta">Menunggu data SQLite...</p>
+</header>
+
+<nav class="tiles" aria-label="Filter kategori unit">
+    <button type="button" class="tile" data-cat="need" aria-pressed="false">
+        <span class="tile-n" id="n-need">0</span>
+        <span class="tile-x"><span class="tile-t">NEED CHECK</span><span class="tile-b" id="b-need"></span></span>
+    </button>
+    <button type="button" class="tile" data-cat="monitoring" aria-pressed="false">
+        <span class="tile-n" id="n-monitoring">0</span>
+        <span class="tile-x"><span class="tile-t">MONITORING</span><span class="tile-b" id="b-monitoring"></span></span>
+    </button>
+    <button type="button" class="tile" data-cat="bd" aria-pressed="false">
+        <span class="tile-n" id="n-bd">0</span>
+        <span class="tile-x"><span class="tile-t">BREAKDOWN</span><span class="tile-b" id="b-bd"></span></span>
+    </button>
+    <button type="button" class="tile" data-cat="comply" aria-pressed="false">
+        <span class="tile-n" id="n-comply">0</span>
+        <span class="tile-x"><span class="tile-t">NORMAL</span><span class="tile-b" id="b-comply"></span></span>
+    </button>
+</nav>
+
+<div class="toolbar">
+    <label class="search">
+        <span class="sr">Cari unit</span>
+        <input id="q" type="search" placeholder="Cari unit, misal CT7261" autocomplete="off">
+    </label>
+    <div class="chips" id="prefixes" role="group" aria-label="Filter jenis unit"></div>
+    <span class="shown" id="shown" aria-live="polite"></span>
+</div>
+
+<main id="main">
+    <section class="group" data-cat="need" aria-labelledby="h-need">
+        <div class="group-head"><h2 id="h-need">NEED CHECK</h2><span class="group-count" id="c-need">0</span></div>
+        <div class="grid" id="grid-need"></div>
+    </section>
+    <section class="group" data-cat="monitoring" aria-labelledby="h-monitoring">
+        <div class="group-head"><h2 id="h-monitoring">MONITORING</h2><span class="group-count" id="c-monitoring">0</span></div>
+        <div class="grid" id="grid-monitoring"></div>
+    </section>
+    <section class="group" data-cat="bd" aria-labelledby="h-bd">
+        <div class="group-head"><h2 id="h-bd">BREAKDOWN</h2><span class="group-count" id="c-bd">0</span></div>
+        <div class="grid" id="grid-bd"></div>
+    </section>
+    <section class="group" data-cat="comply" aria-labelledby="h-comply">
+        <div class="group-head"><h2 id="h-comply">NORMAL</h2><span class="group-count" id="c-comply">0</span></div>
+        <div class="grid" id="grid-comply"></div>
+    </section>
+</main>
+
+<footer class="legend">
+    <span><i data-s="ok"></i>Green: loss 0%</span>
+    <span><i data-s="warn"></i>Yellow: loss sampai 40%</span>
+    <span><i data-s="alert"></i>Orange: gangguan di bawah 15 menit</span>
+    <span><i data-s="crit"></i>Red: gangguan 15 menit atau lebih</span>
+    <span><i></i>N/A: belum ada data</span>
+    <span>Klik kartu unit untuk melihat availability perangkat.</span>
+    <span>OP: hijau normal, kuning delay, merah breakdown. HS: indikator GPS dari SQL Server. R, D, P, G: ping Radio, Display, PLE, GPS. Need Check/Monitoring ditentukan oleh R/D/P; GPS tidak menentukan kategori.</span>
+    <span>Overall availability hanya menghitung R + D + P; GPS tetap dipantau tetapi tidak masuk perhitungan overall.</span>
+    <span>Availability: hijau di atas 90%, kuning 80 sampai 90%, merah di bawah 80%.</span>
+</footer>
+
+<script src="{{ url_for('static', filename='socket.io.min.js') }}"
+        onerror="document.getElementById('status').textContent = 'Library Socket.IO gagal dimuat. Periksa static/socket.io.min.js.';"></script>
+<script>
+(() => {
+    const $ = (id) => document.getElementById(id);
+    // Ukuran teks bisa diatur lewat URL: /?size=1.3 (default 1.15 = 22 px pada layar 1920 px). Zoom browser tidak mengubah ukuran karena skala mengikuti lebar layar.
+    const sizeParam = parseFloat(new URLSearchParams(location.search).get('size'));
+    if (sizeParam >= 0.8 && sizeParam <= 2.5) document.documentElement.style.fontSize = `clamp(16px, ${sizeParam}vw, 48px)`;
+
+    const statusEl = $('status');
+    const staleEl = $('stale');
+    const CATS = ['need', 'monitoring', 'bd', 'comply'];
+    const BD_CATEGORIES = [165096025, 165096022];
+    const BD_CLASSES = [165097066, 165097069];
+    const PREFIX_ORDER = { CB: 1, HB: 2, KB: 3, CT: 4, KT: 5 };
+    const LOADER_PREFIXES = ['CB', 'HB', 'KB'];  // selain ini dianggap hauler
+    const isLoader = (name) => LOADER_PREFIXES.includes(name.substring(0, 2));
+    const STALE_AFTER_SECONDS = 180;
+    const TYPES = ['R', 'D', 'P', 'G'];
+    const OVERALL_TYPES = ['R', 'D', 'P'];
+    const NAMES = { R: 'Radio', D: 'Display', P: 'PLE', G: 'GPS' };
+
+    const state = { q: '', prefix: 'ALL', cat: null, gps: '' };  // gps: '' | 'normal' | 'error'
+    let lastData = [];
+    let lastPingTs = 0;
+    const prevSig = new Map();
+    // ---------- motion ----------
+    const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motion = { target: new Map(), shown: new Map(), raf: new Map() };
+    const numOrNull = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    function flash(el, cls) {  // jalankan ulang animasi singkat pada elemen
+        if (REDUCED || !el) return;
+        el.classList.remove(cls);
+        void el.offsetWidth;
+        el.classList.add(cls);
+        el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+    }
+    function tween(key, el, target, fmt, ms = 700) {  // angka berjalan halus dari nilai lama ke nilai baru
+        cancelAnimationFrame(motion.raf.get(key));
+        motion.target.set(key, target);
+        if (target === null) { el.textContent = fmt(null); motion.shown.set(key, null); return; }
+        const shown = motion.shown.get(key);
+        const from = shown === null || shown === undefined ? 0 : shown;
+        if (REDUCED || from === target) { el.textContent = fmt(target); motion.shown.set(key, target); return; }
+        const t0 = performance.now();
+        el.textContent = fmt(from);
+        const step = (now) => {
+            const k = Math.min(1, (now - t0) / ms);
+            const v = from + (target - from) * (1 - Math.pow(1 - k, 3));
+            motion.shown.set(key, v);
+            if (k < 1) { el.textContent = fmt(v); motion.raf.set(key, requestAnimationFrame(step)); }
+            else { el.textContent = fmt(target); motion.shown.set(key, target); }
+        };
+        motion.raf.set(key, requestAnimationFrame(step));
+    }
+    function tweenCount(cat, target) {  // jumlah di tile: berjalan halus; bump saat berubah; Need Check bertambah = denyut merah
+        const el = $(`n-${cat}`);
+        const before = motion.target.get(`n-${cat}`);
+        tween(`n-${cat}`, el, target, (v) => (v === null ? '' : String(Math.round(v))), 800);
+        if (before !== undefined && before !== target) {
+            flash(el, 'bump');
+            if (cat === 'need' && target > before) flash(el.closest('.tile'), 'surge');
+        }
+    }
+    const prevLamps = new Map();  // nama unit -> {OP: tone, ...} untuk mendeteksi lampu yang berubah
+    const prevCats = new Map();   // nama unit -> kategori sebelumnya
+    let lastTotals = {};
+    let opening = null;           // kartu yang baru dibuka (animasi tumbuh)
+    let firstRender = true;
+
+    // ---------- util ----------
+    function setStatus(message, s = 'waiting') {
+        statusEl.textContent = message;
+        statusEl.dataset.state = s;
+    }
+    function numeric(value) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    }
+    function normalizePing(value) {
+        const known = { green: 'Green', yellow: 'Yellow', orange: 'Orange', red: 'Red' };
+        return known[String(value ?? '').trim().toLowerCase()] || 'N/A';
+    }
+    const PING_TONE = { Green: 'ok', Yellow: 'warn', Orange: 'alert', Red: 'crit', 'N/A': 'off' };
+    function availTone(value) {
+        if (value === null || value === undefined || value === '') return 'off';
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'off';
+        return n > 90 ? 'ok' : n >= 80 ? 'warn' : 'crit';
+    }
+    function pct(value) {
+        return value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+            ? 'N/A' : `${Number(value).toFixed(2)}%`;
+    }
+    function timeOf(iso) {
+        const d = iso ? new Date(iso) : null;
+        return d && !isNaN(d) ? d.toLocaleTimeString('id-ID') : '-';
+    }
+
+    // ---------- availability keseluruhan ----------
+    function setValue(row, value, key) {
+        const b = row.querySelector('b');
+        tween(`ov-${key}`, b, numOrNull(value), pct, 700);
+        b.dataset.t = availTone(value);
+    }
+    function updateOverall(payload) {
+        const overall = (payload && payload.overall) || {};
+        const combined = overall.combined || {};
+        const big = $('overall-availability');
+        tween('overall', big, numOrNull(combined.availability_pct), pct, 900);
+        big.dataset.t = availTone(combined.availability_pct);
+        $('ov-rows').replaceChildren(...OVERALL_TYPES.filter((k) => overall[k]).map((k) => {
+            const row = document.createElement('div');
+            row.className = 'ov-row';
+            row.innerHTML = '<span></span><b></b>';
+            row.firstChild.textContent = NAMES[k];
+            setValue(row, overall[k].availability_pct, k);
+            return row;
+        }));
+        const coverage = combined.coverage_pct != null ? `${Number(combined.coverage_pct).toFixed(1)}%` : 'N/A';
+        const excluded = numeric(payload && payload.excluded_count);
+        const brk = payload && payload.break ? ` Jam ${payload.break} tidak dihitung.` : '';
+        $('overall-meta').textContent =
+            `Coverage ${coverage}. ${excluded} unit Breakdown tidak dihitung. ${numeric(combined.target_count)} perangkat dihitung.${brk}`;
+    }
+
+    // ---------- olah data unit ----------
+    function prepare(row) {
+        const delayCategory = row.DELAYCATEGORY == null ? null : numeric(row.DELAYCATEGORY);
+        const delayClass = row.DELAYCLASS_OID == null ? null : numeric(row.DELAYCLASS_OID);
+        let op = 'ok';
+        if (delayCategory !== null || delayClass !== null) {
+            op = (BD_CATEGORIES.includes(delayCategory) || BD_CLASSES.includes(delayClass)) ? 'crit' : 'warn';
+        }
+        const ping = {};
+        TYPES.forEach((k) => { ping[k] = normalizePing(row[`${k}_status`]); });
+        // Kategori operasional hanya ditentukan oleh R/D/P. GPS (G) tetap
+        // terlihat pada kartu, tetapi RTO GPS tidak membuat unit masuk Need Check.
+        const corePings = OVERALL_TYPES.map((k) => ping[k]);
+        let cat = 'comply';
+        if (op === 'crit') cat = 'bd';
+        else if (corePings.includes('Red')) cat = 'need';
+        else if (corePings.includes('Orange')) cat = 'monitoring';
+        const failMin = Math.max(numeric(row.R_fail_mins), numeric(row.D_fail_mins), numeric(row.P_fail_mins));
+        return {
+            row, cat, op, ping,
+            gps: row.GPSStatus == null ? 'ok' : 'crit',
+            types: TYPES.filter((k) => k !== 'G' || row.G_ip),                                    // perangkat dengan ping/availability
+            lampTypes: TYPES.filter((k) => k !== 'G' || row.G_ip || row.GPS_STATE),                // lampu G juga muncul bila ada data satelit
+            name: String(row.NAME ?? `OID ${row.MACHINE_OID ?? '-'}`),
+            failMin,
+            rOnly: ping.R === 'Red' && ping.D !== 'Red' && ping.P !== 'Red',
+        };
+    }
+
+    // Urutan: BD, lalu Need Check (R-only paling bawah, gangguan terlama dulu), lalu sisanya.
+    const CAT_PRIORITY = { bd: 1, need: 2, monitoring: 3, comply: 4 };
+    function compareUnits(a, b) {
+        if (CAT_PRIORITY[a.cat] !== CAT_PRIORITY[b.cat]) return CAT_PRIORITY[a.cat] - CAT_PRIORITY[b.cat];
+        if (a.cat !== 'comply') {  // Breakdown, Need Check, Monitoring: loader dulu, lalu RTO terlama
+            const la = isLoader(a.name);
+            const lb = isLoader(b.name);
+            if (la !== lb) return la ? -1 : 1;
+            if (a.cat === 'need' && a.rOnly !== b.rOnly) return a.rOnly ? 1 : -1;
+            if (a.failMin !== b.failMin) return b.failMin - a.failMin;
+        }
+        const wa = PREFIX_ORDER[a.name.substring(0, 2)] || 6;
+        const wb = PREFIX_ORDER[b.name.substring(0, 2)] || 6;
+        return wa !== wb ? wa - wb : a.name.localeCompare(b.name);
+    }
+
+    // Rincian tile: "Loader 27: 9 CB, 3 HB, 15 KB" dan "Hauler 10: 10 KT" (kode yang jumlahnya 0 tidak ditampilkan).
+    function breakdownLines(list) {
+        const by = {};
+        list.forEach((u) => { const code = u.name.substring(0, 2); by[code] = (by[code] || 0) + 1; });
+        const codes = Object.keys(by).sort((a, b) => (PREFIX_ORDER[a] || 6) - (PREFIX_ORDER[b] || 6) || a.localeCompare(b));
+        const part = (label, loader) => {
+            const mine = codes.filter((c) => LOADER_PREFIXES.includes(c) === loader);
+            const sum = mine.reduce((n, c) => n + by[c], 0);
+            return sum ? `${label} ${sum}: ${mine.map((c) => `${by[c]}\u00a0${c}`).join(', ')}` : null;
+        };
+        return [part('Loader', true), part('Hauler', false)].filter(Boolean);
+    }
+
+    // ---------- kartu ----------
+    function lamp(label, tone, title) {
+        const el = document.createElement('div');
+        el.className = 'lamp';
+        el.dataset.s = tone;
+        el.textContent = label;
+        el.title = title;
+        el.setAttribute('role', 'img');
+        el.setAttribute('aria-label', title);
+        return el;
+    }
+    function pingTitle(k, u) {
+        const r = u.row;
+        const ip = r[`${k}_ip`] || '-';
+        if (u.ping[k] === 'N/A') return `${k} ${ip}: belum ada data`;
+        const loss = r[`${k}_packet_loss`];
+        const rtt = r[`${k}_avg_rtt`];
+        return `${k} ${ip}: ${u.ping[k]}, loss ${loss == null ? '-' : Number(loss).toFixed(0) + '%'}, ` +
+               `RTT ${rtt == null ? '-' : Number(rtt).toFixed(1) + ' ms'}, cek ${timeOf(r[`${k}_last_check`])}`;
+    }
+    // Kartu ringkas: availability perangkat hanya tampil saat kartu diklik, lalu menutup sendiri setelah EXPAND_MS.
+    const EXPAND_MS = 60000;
+    const expanded = new Map();  // nama unit -> waktu dibuka
+    function isOpen(name) {
+        const t = expanded.get(name);
+        if (t === undefined) return false;
+        if (Date.now() - t > EXPAND_MS) { expanded.delete(name); return false; }
+        return true;
+    }
+    function gpsTitle(u) {
+        const r = u.row;
+        const label = { ok: 'hijau', warn: 'kuning', crit: 'merah' }[r.GPS_STATE];
+        const ping = r.G_ip ? `\n${pingTitle('G', u)}` : '';
+        const sat = r.GPS_VALUE == null ? 'tidak ada data satelit' : `${Number(r.GPS_VALUE)} satelit`;
+        return `GPS: ${sat} (${label})${ping}`;
+    }
+
+    function lampList(u) {
+        const list = [
+            { label: 'OP', tone: u.op, title: `OP: ${u.op === 'crit' ? 'breakdown' : u.op === 'warn' ? 'delay' : 'normal'}` },
+            { label: 'HS', tone: u.gps, title: `HS (GPS): ${u.gps === 'ok' ? 'normal' : 'terdeteksi'}` },
+        ];
+        u.lampTypes.forEach((k) => {
+            const byValue = k === 'G' && u.row.GPS_STATE;  // satelit GPS: NULL atau <13 merah, 13-14 kuning, 15+ hijau (ambang di .env)
+            list.push({ label: k, tone: byValue ? u.row.GPS_STATE : PING_TONE[u.ping[k]], title: byValue ? gpsTitle(u) : pingTitle(k, u) });
+        });
+        return list;
+    }
+
+    function buildCard(u) {
+        const card = document.createElement('article');
+        const open = isOpen(u.name);
+        card.className = open ? 'unit open' : 'unit';
+        card.dataset.cat = u.cat;
+        card.dataset.name = u.name;
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-expanded', String(open));
+
+        const head = document.createElement('div');
+        head.className = 'u-head';
+        const name = document.createElement('h3');
+        name.className = 'u-name';
+        name.textContent = u.name;
+        name.title = u.name;
+        head.appendChild(name);
+        if (u.cat === 'bd') {
+            const f = document.createElement('span');
+            f.className = 'u-flag bd';
+            f.textContent = 'BD';
+            f.title = 'Breakdown: tidak dihitung di availability keseluruhan';
+            head.appendChild(f);
+        }
+        if (u.failMin > 0 && OVERALL_TYPES.some((k) => u.ping[k] === 'Red')) {
+            const f = document.createElement('span');
+            f.className = 'u-flag rto';
+            f.textContent = `RTO ${u.failMin}m`;
+            f.title = `Gangguan berjalan ${u.failMin} menit`;
+            head.appendChild(f);
+        }
+
+        const lamps = document.createElement('div');
+        lamps.className = 'lamps';
+        const prev = prevLamps.get(u.name);
+        lampList(u).forEach((l) => {
+            const el = lamp(l.label, l.tone, l.title);
+            if (!firstRender && prev && prev[l.label] !== undefined && prev[l.label] !== l.tone) el.classList.add('pop');
+            lamps.appendChild(el);
+        });
+
+        const av = document.createElement('div');
+        av.className = 'av';
+        u.types.forEach((k) => {
+            const row = document.createElement('div');
+            row.className = 'av-row';
+            row.innerHTML = '<span></span><b></b>';
+            row.firstChild.textContent = NAMES[k];
+            const value = row.lastChild;
+            value.textContent = pct(u.row[`${k}_availability`]);
+            value.dataset.t = availTone(u.row[`${k}_availability`]);
+            row.title = `Availability ${NAMES[k]} hari ini`;
+            av.appendChild(row);
+        });
+
+        card.append(head, lamps);
+        if (open) {
+            const wrap = document.createElement('div');
+            wrap.className = 'av-wrap';
+            wrap.appendChild(av);
+            card.appendChild(wrap);
+            if (opening === u.name && !REDUCED) {  // baru dibuka: tumbuh dari tinggi 0
+                wrap.classList.add('closed');
+                requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.remove('closed')));
+            }
+        }
+        return card;
+    }
+
+    // ---------- render ----------
+    // GPS nyala = unit punya IP GPS dan ping G merespons (Green atau Yellow).
+    const gpsOn = (u) => (u.row.GPS_NORMAL !== undefined
+        ? u.row.GPS_NORMAL === true
+        : u.types.includes('G') && (u.ping.G === 'Green' || u.ping.G === 'Yellow'));
+    // GPS error = lampu G merah (satelit kosong atau <13; tanpa data satelit: ping GPS Red).
+    const gpsErr = (u) => (u.row.GPS_ERROR !== undefined ? u.row.GPS_ERROR === true : u.types.includes('G') && u.ping.G === 'Red');
+    function visible(u) {
+        if (state.prefix !== 'ALL' && !u.name.startsWith(state.prefix)) return false;
+        if (state.gps === 'normal' && !gpsOn(u)) return false;
+        if (state.gps === 'error' && !gpsErr(u)) return false;
+        return !state.q || u.name.toLowerCase().includes(state.q);
+    }
+    function buildPrefixChips(units) {
+        const prefixes = [...new Set(units.map((u) => u.name.substring(0, 2)))]
+            .sort((a, b) => (PREFIX_ORDER[a] || 6) - (PREFIX_ORDER[b] || 6) || a.localeCompare(b));
+        if (state.prefix !== 'ALL' && !prefixes.includes(state.prefix)) state.prefix = 'ALL';
+        const box = $('prefixes');
+        box.replaceChildren(...['ALL', ...prefixes].map((p) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'chip-btn';
+            b.textContent = p === 'ALL' ? 'Semua' : p;
+            b.dataset.p = p;
+            b.setAttribute('aria-pressed', String(p === 'ALL' ? state.prefix === 'ALL' && !state.gps : state.prefix === p));
+            return b;
+        }));
+        // Filter GPS (di samping filter kode unit); hanya muncul bila ada unit yang bisa dinilai GPS-nya.
+        if (!units.some((u) => (u.row.GPS_NORMAL !== undefined ? u.row.GPS_NORMAL !== null : u.types.includes('G')))) { state.gps = ''; return; }
+        [['normal', 'GPS normal', 'Hanya unit dengan GPS normal (satelit 15 ke atas; tanpa data satelit: ping GPS Green atau Yellow)'],
+         ['error', 'GPS error', 'Hanya unit dengan GPS error (lampu G merah: satelit kosong atau kurang dari 13; tanpa data satelit: ping GPS Red)']].forEach(([key, label, title]) => {
+            const g = document.createElement('button');
+            g.type = 'button';
+            g.className = 'chip-btn';
+            g.textContent = label;
+            g.dataset.gps = key;
+            g.title = title;
+            g.setAttribute('aria-pressed', String(state.gps === key));
+            box.appendChild(g);
+        });
+    }
+    function render(opts = {}) {
+        const units = lastData.map(prepare).sort(compareUnits);
+        buildPrefixChips(units);
+        const enter = firstRender || Boolean(opts.enter);  // kartu masuk berurutan saat pertama tampil dan saat filter diganti
+
+        const total = Object.fromEntries(CATS.map((c) => [c, 0]));
+        units.forEach((u) => { total[u.cat]++; });
+        CATS.forEach((c) => {
+            tweenCount(c, total[c]);
+            $(`b-${c}`).replaceChildren(...breakdownLines(units.filter((u) => u.cat === c)).map((text) => {
+                const line = document.createElement('span');
+                line.textContent = text;
+                return line;
+            }));
+        });
+        lastTotals = total;
+        document.querySelectorAll('.tile').forEach((t) => t.setAttribute('aria-pressed', String(state.cat === t.dataset.cat)));
+
+        let shown = 0;
+        CATS.forEach((c) => {
+            const group = document.querySelector(`.group[data-cat="${c}"]`);
+            group.hidden = total[c] === 0 || (state.cat !== null && state.cat !== c);  // grup kosong disembunyikan; jumlahnya sudah ada di tile
+            const mine = units.filter((u) => u.cat === c && visible(u));
+            shown += mine.length;
+            $(`c-${c}`).textContent = mine.length === total[c] ? total[c] : `${mine.length} dari ${total[c]}`;
+            const grid = $(`grid-${c}`);
+            if (!mine.length) {
+                const empty = document.createElement('div');
+                empty.className = 'empty';
+                empty.textContent = total[c] ? 'Tidak ada unit yang cocok dengan filter.' : 'Tidak ada unit.';
+                grid.replaceChildren(empty);
+                return;
+            }
+            grid.replaceChildren(...mine.map((u, idx) => {
+                const card = buildCard(u);
+                if (enter) { card.classList.add('enter'); card.style.setProperty('--i', String(Math.min(idx, 30))); }
+                if (!firstRender && prevCats.has(u.name) && prevCats.get(u.name) !== 'need' && u.cat === 'need') card.classList.add('arrive');
+                const sig = `${u.cat}|${u.op}|${u.gps}|${u.types.map((k) => u.ping[k]).join('')}`;
+                if (!firstRender && prevSig.has(u.name) && prevSig.get(u.name) !== sig) card.classList.add('changed');
+                return card;
+            }));
+        });
+        units.forEach((u) => {
+            prevCats.set(u.name, u.cat);
+            prevLamps.set(u.name, Object.fromEntries(lampList(u).map((l) => [l.label, l.tone])));
+        });
+        // simpan tanda tangan semua unit (termasuk yang tersaring) agar perubahan tidak terlewat
+        units.forEach((u) => prevSig.set(u.name, `${u.cat}|${u.op}|${u.gps}|${u.types.map((k) => u.ping[k]).join('')}`));
+        firstRender = false;
+        $('shown').textContent = `Menampilkan ${shown} dari ${units.length} unit`;
+    }
+
+    function showEmpty(message) {
+        CATS.forEach((c) => {
+            const empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = message;
+            $(`grid-${c}`).replaceChildren(empty);
+        });
+    }
+
+    // ---------- deteksi collector berhenti ----------
+    // Banner peringatan: scan terakhir gagal/dibatalkan canary (dari collector_status) dan hasil ping yang sudah basi.
+    let collectorMsg = '';
+    function checkStale() {
+        const msgs = [];
+        if (collectorMsg) msgs.push(collectorMsg);
+        if (lastPingTs) {
+            const age = Math.round((Date.now() - lastPingTs) / 1000);
+            if (age > STALE_AFTER_SECONDS) msgs.push(`Hasil ping terakhir ${Math.round(age / 60)} menit lalu. Periksa collect_ping.py masih berjalan.`);
+        }
+        staleEl.textContent = msgs.join(' ');
+        staleEl.hidden = msgs.length === 0;
+    }
+    setInterval(checkStale, 15000);
+
+    // ---------- interaksi ----------
+    const findCard = (name) => [...document.querySelectorAll('.unit')].find((el) => el.dataset.name === name);
+    function refocus(name) {
+        const again = findCard(name);
+        if (again) again.focus({ preventScroll: true });
+    }
+    function toggleCard(name) {
+        if (isOpen(name)) {
+            const card = findCard(name);
+            const wrap = card && card.querySelector('.av-wrap');
+            if (wrap && !REDUCED) {  // menutup: tinggi mengecil dulu, lalu kartu dibangun ulang
+                wrap.classList.add('closed');
+                card.setAttribute('aria-expanded', 'false');
+                setTimeout(() => { expanded.delete(name); render(); refocus(name); }, 200);
+                return;
+            }
+            expanded.delete(name);
+        } else {
+            expanded.set(name, Date.now());
+            opening = name;
+        }
+        render();
+        opening = null;
+        refocus(name);
+    }
+    $('main').addEventListener('click', (e) => {
+        const card = e.target.closest('.unit');
+        if (card) toggleCard(card.dataset.name);
+    });
+    $('main').addEventListener('keydown', (e) => {
+        const card = e.target.closest('.unit');
+        if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleCard(card.dataset.name); }
+    });
+    $('open-report').addEventListener('click', () => window.open('/report/sqlite', '_blank', 'noopener'));
+    $('q').addEventListener('input', (e) => { state.q = e.target.value.trim().toLowerCase(); render(); });
+    $('prefixes').addEventListener('click', (e) => {
+        const g = e.target.closest('button[data-gps]');
+        if (g) { state.gps = state.gps === g.dataset.gps ? '' : g.dataset.gps; render({ enter: true }); return; }
+        const b = e.target.closest('button[data-p]');
+        if (b) {
+            state.prefix = b.dataset.p;
+            if (b.dataset.p === 'ALL') state.gps = '';  // "Semua" membersihkan seluruh filter unit
+            render({ enter: true });
+        }
+    });
+    document.querySelector('.tiles').addEventListener('click', (e) => {
+        const t = e.target.closest('.tile');
+        if (t) { state.cat = state.cat === t.dataset.cat ? null : t.dataset.cat; render({ enter: true }); }
+    });
+
+    // ---------- Socket.IO (kontrak event tidak berubah) ----------
+    if (typeof window.io !== 'function') {
+        setStatus('Library Socket.IO tidak ditemukan. Pastikan static/socket.io.min.js menggunakan client versi 4.x.', 'error');
+        console.error('[Socket.IO] window.io tidak tersedia. Periksa static/socket.io.min.js.');
+        return;
+    }
+    showEmpty('Menunggu data dari server...');
+    const socket = window.io({ reconnection: true, reconnectionAttempts: Infinity, timeout: 10000 });
+
+    socket.on('connect', () => setStatus('Terhubung ke server. Menunggu data mesin dari SQL Server...', 'connected'));
+    socket.on('connect_error', (error) => setStatus(`Gagal menghubungkan Socket.IO: ${error.message || error}`, 'error'));
+    socket.on('disconnect', (reason) => setStatus(`Koneksi ke server terputus: ${reason}. Mencoba menyambungkan kembali...`, 'error'));
+    socket.on('database_error', (error) => {
+        const message = error && error.message ? error.message : String(error || 'Kesalahan database tidak diketahui.');
+        setStatus(`Socket terhubung, tetapi pengambilan data gagal: ${message}`, 'error');
+    });
+    socket.on('availability_overall', updateOverall);
+    socket.on('collector_status', (info) => {
+        const error = info && info.status === 'FAILED' ? String(info.error || '') : '';
+        collectorMsg = !error ? '' : error.startsWith('CANARY')
+            ? 'Canary gagal: jaringan PC monitor bermasalah. Data tidak diperbarui agar tidak muncul downtime palsu.'
+            : `Scan terakhir gagal: ${error}. Status perangkat tidak diubah.`;
+        checkStale();
+    });
+
+    socket.on('database_data', (data) => {
+        if (!Array.isArray(data)) {
+            setStatus('Data dari server tidak valid: format yang diterima bukan array.', 'error');
+            return;
+        }
+        if (data.length === 0) {
+            lastData = [];
+            showEmpty('Tidak ada data mesin yang diterima. Periksa daftar OID dan query SQL Server.');
+            setStatus('Socket terhubung. Query SQL Server berhasil, tetapi tidak mengembalikan data mesin.', 'waiting');
+            return;
+        }
+        lastData = data;
+        lastPingTs = 0;
+        data.forEach((row) => TYPES.forEach((k) => {
+            const t = row[`${k}_last_check`] ? Date.parse(row[`${k}_last_check`]) : 0;
+            if (t > lastPingTs) lastPingTs = t;
+        }));
+        render();
+        checkStale();
+        const counts = lastTotals;
+        setStatus(
+            `Diperbarui ${new Date().toLocaleTimeString('id-ID')}. Total ${data.length} unit: ` +
+            `Need Check ${counts.need}, Monitoring ${counts.monitoring}, Breakdown ${counts.bd}, Comply ${counts.comply}.`,
+            'connected'
+        );
+        flash(statusEl, 'beat');
+    });
+})();
+</script>
+</body>
+</html>

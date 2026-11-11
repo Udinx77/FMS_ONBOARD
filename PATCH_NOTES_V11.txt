@@ -1,0 +1,10 @@
+V11
+- IP GPS dibaca dari dataoidip.xlsx (kolom OID/Name + GPS atau G) dan digabung ke hasil query SQL: per OID, cadangan per nama unit. Kolom IP GPS pada query (jika kelak ada) diutamakan. Excel dibaca ulang otomatis saat file berubah, tanpa query SQL dan tanpa restart. File tidak ada atau rusak: sistem tetap jalan (GPS belum dipantau / data GPS terakhir dipakai). Konfigurasi: GPS_SOURCE (excel|none), GPS_EXCEL_FILE.
+- Dashboard: filter GPS di sebelah filter CB, HB, KB, CT, KT. GPS menyala = punya IP GPS dan ping GPS Green atau Yellow. Bisa digabung dengan filter kode dan pencarian; Semua membersihkan seluruh filter.
+- run.bat: jalankan seluruh sistem dengan satu klik (cari Python, cek .env, pasang dependensi bila belum ada, buka collector dan dashboard di dua jendela, buka browser). Belum diuji pada Windows di lingkungan pengembangan; jika ada masalah, jalankan manual (lihat README bagian 4).
+- Tes baru: test_gps_excel.py.
+
+CARA UPDATE:
+1. Matikan app.py dan collect_ping.py. Ekstrak ZIP ke folder project (jangan timpa .env, monitoring.db, dan dataoidip.xlsx).
+2. Pastikan dataoidip.xlsx ada di folder project dengan kolom OID (atau Name) dan GPS (atau G).
+3. Jalankan run.bat. Periksa log: '[SQL] Berhasil memuat N OID' dan '[GPS] N IP GPS dibaca ...; M cocok ...'.

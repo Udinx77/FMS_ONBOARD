@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laporan SQLite - Network Availability</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:22px;background:#f3f5f8;color:#172033;font-family:Arial,sans-serif}
+.wrap{max-width:1600px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:22px;margin:0 0 5px;color:#172033}
+.subtitle{font-size:12px;color:#64748b}
+.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+input,button,a.btn{border:1px solid #cbd5e1;border-radius:6px;padding:9px 12px;font:inherit;font-size:13px;text-decoration:none}
+button,.btn-primary{background:#087f46;color:white;border-color:#087f46;cursor:pointer}
+a.btn-secondary{background:#fff;color:#172033}
+.scan-box{padding:12px 14px;background:#e9eff5;border:1px solid #d6e0e9;border-radius:8px;margin-bottom:16px;font-size:12px;line-height:1.7}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:18px}
+.card{padding:14px;background:#fff;border:1px solid #dfe5ec;border-radius:9px}
+.label{font-size:11px;font-weight:700;color:#64748b;letter-spacing:.04em}
+.value{display:block;font-size:25px;font-weight:800;margin:5px 0}
+.meta{font-size:11px;color:#64748b}
+.green{color:#078a48}.yellow{color:#b28b00}.red{color:#d7193f}.na{color:#94a3b8}
+.table-wrap{overflow:auto;background:#fff;border:1px solid #dfe5ec;border-radius:9px}
+table{border-collapse:collapse;width:100%;min-width:1200px;font-size:11px}
+th{position:sticky;top:0;background:#20364b;color:#fff;text-align:left;padding:10px 8px;white-space:nowrap}
+td{padding:8px;border-bottom:1px solid #e8edf2;white-space:nowrap}
+tbody tr:nth-child(even){background:#f8fafc}
+.status{display:inline-block;padding:3px 7px;border-radius:10px;font-weight:700;font-size:10px}
+.status-Green{background:#b7f7d0;color:#065f46}.status-Yellow{background:#fff0a6;color:#725900}.status-Orange{background:#ffd7b0;color:#9a3412}.status-Red{background:#ffc2cc;color:#9f1239}.status-NA{background:#e5e7eb;color:#475569}
+.monthly{padding:14px;background:#fff;border:1px solid #dfe5ec;border-radius:9px;margin-bottom:18px}
+.monthly h2{font-size:15px;margin:0 0 8px}
+.monthly table{min-width:0;width:auto;margin-top:8px}
+.monthly .warn{color:#b45309;font-weight:700}
+.note{margin:12px 0 0;color:#64748b;font-size:11px;line-height:1.5}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){body{padding:12px}.cards{grid-template-columns:1fr 1fr}.value{font-size:20px}}
+@media print{body{padding:0;background:#fff}.actions{display:none}.table-wrap{overflow:visible;border:0}table{min-width:0;font-size:8px}th{position:static}.cards{break-inside:avoid}.scan-box{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Network Availability & SQLite Status Report</h1>
+      <div class="subtitle">Tanggal availability: {{ report.date }} · Timezone: {{ report.timezone }} · Total unit: {{ report.unit_count }}</div>
+    </div>
+    <div class="actions">
+      <form method="get" action="{{ url_for('sqlite_status_report') }}" class="actions">
+        <label for="date">Tanggal:</label>
+        <input type="date" id="date" name="date" value="{{ report.date }}">
+        <button type="submit">Tampilkan</button>
+      </form>
+      <a class="btn btn-primary" href="{{ url_for('export_availability_pdf', date=report.date) }}">Export PDF</a>
+      <a class="btn btn-primary" href="{{ url_for('export_availability_excel', date=report.date) }}">Export Excel</a>
+      <a class="btn btn-secondary" href="/">Kembali ke Dashboard</a>
+    </div>
+  </div>
+
+  <div class="monthly">
+    <h2>Export bulanan ONB</h2>
+    <form method="get" action="{{ url_for('export_availability_monthly') }}" class="actions">
+      <label for="month">Bulan:</label>
+      <input type="month" id="month" name="month" value="{{ monthly.default }}" max="{{ monthly.current }}">
+      <button type="submit">Export Excel bulanan</button>
+    </form>
+    {% if monthly.pending %}<div class="note warn">Belum diekspor: {{ monthly.pending|join(', ') }}. Data bulan yang belum diekspor tidak pernah dihapus otomatis.</div>{% endif %}
+    {% if monthly.months %}
+    <table>
+      <thead><tr><th>Bulan</th><th>Hari berdata</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for m in monthly.months %}
+        <tr><td>{{ m.month }}</td><td>{{ m.days }}</td>
+            <td>{% if m.exported_label %}Sudah diekspor {{ m.exported_label }}{% elif m.final %}Belum diekspor{% else %}Bulan berjalan (belum final){% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <div class="note">
+      {% if monthly.purge %}Data bulan yang sudah diekspor dan lebih tua dari {{ monthly.keep }} bulan terakhir dihapus otomatis oleh collector (sekali sehari).{% else %}Penghapusan otomatis dimatikan (AVAILABILITY_PURGE=false).{% endif %}
+      Mengekspor bulan berjalan tidak menandai bulan itu sebagai sudah diekspor.
+    </div>
+  </div>
+
+  {% set names = {'R':'RADIO (R)','D':'DISPLAY (D)','P':'PLE (P)','G':'GPS (G)'} %}
+  {% set keys = [] %}
+  {% for t in report.overall_device_types %}{% set _ = keys.append((t, 'ALL ' ~ names[t])) %}{% endfor %}
+  {% set _ = keys.append(('combined', 'GABUNGAN ' ~ report.overall_device_types|join(' + '))) %}
+  <div class="cards">
+    {% for key,label in keys %}
+      {% set item = report.overall[key] %}
+      {% if item.availability_pct is none %}{% set cls='na' %}{% elif item.availability_pct > 90 %}{% set cls='green' %}{% elif item.availability_pct >= 80 %}{% set cls='yellow' %}{% else %}{% set cls='red' %}{% endif %}
+      <div class="card">
+        <div class="label">{{ label }}</div>
+        <strong class="value {{ cls }}">{% if item.availability_pct is none %}N/A{% else %}{{ '%.2f'|format(item.availability_pct) }}%{% endif %}</strong>
+        <div class="meta">Coverage {{ '%.1f'|format(item.coverage_pct) }}% · {{ item.devices_with_data }}/{{ item.target_count }} IP ada data</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if report.latest_scan %}
+  <div class="scan-box">
+    <b>Status SQLite / Scan terakhir:</b> {{ report.latest_scan.scan_status }}<br>
+    Mulai: {{ report.latest_scan.started_local or 'N/A' }} · Selesai: {{ report.latest_scan.finished_local or 'Belum selesai' }}<br>
+    Target: {{ report.latest_scan.target_count }} · Diperiksa: {{ report.latest_scan.checked_count }} · Durasi: {{ '%.2f'|format(report.latest_scan.duration_seconds or 0) }} detik · Status device tersimpan: {{ report.latest_status_count }}
+    {% if report.latest_scan.error_message %}<br><b>Pesan error:</b> {{ report.latest_scan.error_message }}{% endif %}
+  </div>
+  {% else %}
+  <div class="scan-box"><b>Status SQLite:</b> Belum ada scan yang tersimpan.</div>
+  {% endif %}
+
+  <h2 style="font-size:16px;margin:0 0 9px">Rincian status seluruh perangkat R / D / P{% if 'G' in report.device_types %} / GPS{% endif %}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>OID</th><th>Nama Unit</th><th>Tipe</th><th>IP Address</th><th>Status SQLite</th>
+          <th>Packet Loss</th><th>Paket RX/TX</th><th>Average RTT</th><th>Availability</th>
+          <th>Uptime (jam)</th><th>Downtime (jam)</th><th>Coverage</th><th>Last Check</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for unit in report.units %}
+        {% for dtype in report.device_types %}
+          {% set dev = unit.devices[dtype] %}
+          {% set stat = dev.status if dev.status else 'N/A' %}
+          {% if dev.availability_pct is none %}{% set avcls='na' %}{% elif dev.availability_pct > 90 %}{% set avcls='green' %}{% elif dev.availability_pct >= 80 %}{% set avcls='yellow' %}{% else %}{% set avcls='red' %}{% endif %}
+          <tr>
+            <td>{{ unit.machine_oid }}</td>
+            <td>{{ unit.machine_name }}{% if unit.excluded %} <span class="status status-NA" title="Tidak dihitung di availability overall">BD</span>{% endif %}</td>
+            <td><b>{{ dtype }}</b></td>
+            <td>{{ dev.ip_address or '-' }}</td>
+            <td><span class="status status-{{ stat if stat in ('Green','Yellow','Orange','Red') else 'NA' }}">{{ stat }}</span></td>
+            <td>{% if dev.packet_loss_pct is none %}N/A{% else %}{{ '%.1f'|format(dev.packet_loss_pct) }}%{% endif %}</td>
+            <td>{% if dev.packets_sent is none %}N/A{% else %}{{ dev.packets_received }}/{{ dev.packets_sent }}{% endif %}</td>
+            <td>{% if dev.avg_rtt_ms is none %}N/A{% else %}{{ '%.2f'|format(dev.avg_rtt_ms) }} ms{% endif %}</td>
+            <td class="{{ avcls }}">{% if dev.availability_pct is none %}N/A{% else %}{{ '%.2f'|format(dev.availability_pct) }}%{% endif %}</td>
+            <td>{{ '%.2f'|format(dev.uptime_seconds / 3600) }}</td>
+            <td>{{ '%.2f'|format(dev.downtime_seconds / 3600) }}</td>
+            <td>{{ '%.1f'|format(dev.coverage_pct) }}%</td>
+            <td>{{ dev.last_checked_at or 'N/A' }}</td>
+          </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    Availability dihitung sebagai uptime / observed time × 100%. Coverage adalah observed time dibandingkan periode laporan.
+    Status SQLite, packet loss, jumlah paket, RTT, dan last check menunjukkan sampel terbaru saat laporan dibuka.
+    N/A berarti belum ada histori atau status yang tersimpan, bukan otomatis online/offline.
+    Data jam istirahat tidak dihitung untuk availability dan coverage.
+    Unit Breakdown (BD) tidak dihitung di kartu ringkasan ({{ report.excluded_count }} unit), tetap tampil di tabel dengan tanda BD.
+    GPS (G) tetap dipantau dan ditampilkan pada rincian perangkat, tetapi tidak dimasukkan ke availability overall maupun availability gabungan per unit. Overall hanya menghitung R + D + P.
+  </p>
+</div>
+</body>
+</html>
