@@ -66,8 +66,8 @@ SELECT
     mr.[name] AS MACHINE_NAME,
     LTRIM(RTRIM(mc.[interfaceName])) AS INTERFACE_NAME,
     ip_data.IP_ADDRESS
-FROM [mshist_rep].[dbo].[VM_MACHINE_COMMUNICATIONS] AS mc
-LEFT JOIN [mshist_rep].[dbo].[V_MACHINE_REFERENCE] AS mr
+FROM [].[dbo].[VM_MACHINE_COMMUNICATIONS] AS mc
+LEFT JOIN [].[dbo].[V_MACHINE_REFERENCE] AS mr
     ON mc.[parentOID] = mr.[OID]
 CROSS APPLY (
     SELECT LTRIM(RTRIM(REPLACE(
@@ -90,7 +90,7 @@ ORDER BY mc.[parentOID], mc.[interfaceName]
 
 DISTINCT_INTERFACES_QUERY = r"""
 SELECT DISTINCT LTRIM(RTRIM([interfaceName])) AS INTERFACE_NAME
-FROM [mshist_rep].[dbo].[VM_MACHINE_COMMUNICATIONS]
+FROM [].[dbo].[VM_MACHINE_COMMUNICATIONS]
 WHERE [interfaceName] IS NOT NULL
 ORDER BY LTRIM(RTRIM([interfaceName]))
 """
